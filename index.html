@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CosmoMap — Laisse ta trace dans l'espace</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Georgia', serif; background: #0a1228; }
+
+  /* OVERLAY / SHOP */
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50; padding: 1rem;
+  }
+  #modal {
+    background: #FAFDF9;
+    border-radius: 14px;
+    padding: clamp(1.25rem, 4vw, 2rem);
+    width: min(380px, 94vw);
+    max-height: 92vh; overflow-y: auto;
+    text-align: center;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.3);
+  }
+  #modal .logo { font-size: 1.3rem; font-weight: 700; color: #1C2B1A; letter-spacing: -0.03em; margin-bottom: 0.6rem; }
+  #modal .logo span { color: #6B8F65; }
+  #modal h2 { font-size: 1.05rem; font-weight: 700; color: #1C2B1A; margin-bottom: 0.4rem; }
+  #modal p.intro { font-size: 0.85rem; color: #3D5239; margin-bottom: 1.2rem; line-height: 1.6; }
+
+  #modal input {
+    width: 100%; padding: 11px 14px; margin-bottom: 1rem;
+    font-size: 1rem; font-family: inherit;
+    border: 1.5px solid #C5D9C2; border-radius: 8px;
+    background: #EBF2EA; color: #1C2B1A; outline: none;
+  }
+  #modal input:focus { border-color: #6B8F65; }
+
+  .product-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem; }
+  .product-card {
+    display: flex; align-items: center; gap: 12px;
+    border: 1.5px solid #C5D9C2; border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer; text-align: left;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .product-card:hover { background: #F2F8F1; }
+  .product-card.selected { border-color: #6B8F65; background: #EBF2EA; }
+  .product-icon { font-size: 1.8rem; flex-shrink: 0; width: 2.2rem; text-align: center; }
+  .product-info { flex: 1; }
+  .product-info .name { font-weight: 700; color: #1C2B1A; font-size: 0.95rem; }
+  .product-info .desc { font-size: 0.78rem; color: #7A9275; margin-top: 1px; }
+  .product-price {
+    font-weight: 700; color: #1C2B1A; font-size: 1rem;
+    background: #EBF2EA; border-radius: 6px; padding: 4px 10px; flex-shrink: 0;
+  }
+  .product-card.selected .product-price { background: #6B8F65; color: #fff; }
+
+  #modal button.cta {
+    width: 100%; padding: 12px;
+    background: #1C2B1A; color: #FAFDF9;
+    border: none; border-radius: 8px;
+    font-size: 1rem; font-family: inherit; cursor: pointer;
+    transition: background 0.2s;
+  }
+  #modal button.cta:hover { background: #3D5239; }
+  #modal button.cta:disabled { background: #C5D9C2; cursor: not-allowed; }
+  #modal .secure-note {
+    font-size: 0.72rem; color: #7A9275; margin-top: 0.7rem;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+
+  /* LAYOUT */
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+  /* TOOLBAR */
+  #toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px;
+    background: #FAFDF9;
+    border-bottom: 1px solid #C5D9C2;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .logo-small { font-size: 1rem; font-weight: 700; color: #1C2B1A; letter-spacing: -0.03em; margin-right: 6px; white-space: nowrap; }
+  .logo-small span { color: #6B8F65; }
+  .tool-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 11px;
+    border: 1px solid #ccc; border-radius: 8px;
+    background: #f4f4f4; color: #1C2B1A;
+    font-size: 13px; cursor: pointer; font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .tool-btn:hover { background: #e8e8e8; }
+  .tool-btn.active { background: #EEEDFE; border-color: #7F77DD; color: #3C3489; font-weight: 600; }
+  .zoom-btn {
+    padding: 5px 9px;
+    border: 1px solid #ccc; border-radius: 8px;
+    background: #f4f4f4; color: #1C2B1A;
+    font-size: 15px; cursor: pointer; font-family: inherit; line-height: 1;
+  }
+  .zoom-btn:hover { background: #e8e8e8; }
+  #zoom-label { font-size: 12px; color: #888; min-width: 38px; text-align: center; }
+  #user-info { margin-left: auto; font-size: 13px; color: #7A9275; white-space: nowrap; }
+
+  /* MAP */
+  #map-wrap {
+    flex: 1; overflow: hidden;
+    cursor: default; position: relative;
+    background: #0a1228;
+    touch-action: none;
+    min-height: 0;
+  }
+  #map-canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; transform-origin: 0 0; }
+
+  /* STATUSBAR */
+  #statusbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 5px 12px;
+    background: #FAFDF9;
+    border-top: 1px solid #C5D9C2;
+    font-size: 12px; color: #7A9275;
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #statusbar .hint { margin-left: auto; opacity: 0.55; font-size: 11px; }
+
+  /* RESPONSIVE TWEAKS */
+  @media (max-width: 520px) {
+    .tool-btn .size-label { display: none; }
+    #toolbar { gap: 4px; padding: 6px 8px; }
+    .tool-btn { padding: 5px 8px; font-size: 12px; }
+    #statusbar .hint { display: none; }
+  }
+  @media (max-width: 360px) {
+    .logo-small { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SHOP OVERLAY -->
+<div id="overlay">
+  <div id="modal">
+    <div class="logo">Cosmo<span>Map</span></div>
+    <h2>✨ Laisse ta trace dans l'univers</h2>
+    <p class="intro">Choisis ton élément, entre ton pseudo, et place-le pour toujours sur la carte partagée d'1 million de pixels.</p>
+
+    <div class="product-list">
+      <div class="product-card selected" data-tool="star" data-price="1">
+        <div class="product-icon">⭐</div>
+        <div class="product-info">
+          <div class="name">Étoile</div>
+          <div class="desc">1×1 pixel — la trace discrète</div>
+        </div>
+        <div class="product-price">1 €</div>
+      </div>
+      <div class="product-card" data-tool="moon" data-price="2">
+        <div class="product-icon">🌙</div>
+        <div class="product-info">
+          <div class="name">Lune</div>
+          <div class="desc">3×3 pixels — douce et visible</div>
+        </div>
+        <div class="product-price">2 €</div>
+      </div>
+      <div class="product-card" data-tool="sun" data-price="3">
+        <div class="product-icon">☀️</div>
+        <div class="product-info">
+          <div class="name">Soleil</div>
+          <div class="desc">5×5 pixels — rayonne sur la map</div>
+        </div>
+        <div class="product-price">3 €</div>
+      </div>
+    </div>
+
+    <input id="pseudo-input" type="text" placeholder="Ton pseudo..." maxlength="24" autocomplete="off" />
+
+    <button class="cta" id="enter-btn">Payer 1 € et placer mon étoile</button>
+    <p class="secure-note">🔒 Paiement sécurisé via Stripe</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="toolbar">
+    <span class="logo-small">Cosmo<span>Map</span></span>
+    <span id="purchase-badge" style="display:none;font-size:13px;color:#3C3489;background:#EEEDFE;border:1px solid #7F77DD;border-radius:8px;padding:5px 11px;font-weight:600;"></span>
+    <div style="display:flex;align-items:center;gap:3px;margin-left:auto;">
+      <button class="zoom-btn" id="zoom-out">−</button>
+      <span id="zoom-label">100%</span>
+      <button class="zoom-btn" id="zoom-in">+</button>
+      <button class="zoom-btn" id="zoom-reset" style="font-size:11px;padding:5px 7px;">⌂</button>
+    </div>
+    <span id="user-info"></span>
+  </div>
+
+  <div id="map-wrap">
+    <canvas id="map-canvas"></canvas>
+
+  </div>
+
+  <div id="statusbar">
+    <span>⭐ <span id="count-star">0</span></span>
+    <span>☀️ <span id="count-sun">0</span></span>
+    <span>🌙 <span id="count-moon">0</span></span>
+    <span>🌍 <span id="count-users">0</span> explorateurs</span>
+    <span class="hint">Scroll = zoom · Clic droit / deux doigts = naviguer</span>
+  </div>
+</div>
+
+<script>
+const SAGE = '#8FAF8A';
+const MAP_SIZE = 1000;
+
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = MAP_SIZE; canvas.height = MAP_SIZE;
+const bgImg = new Image();
+bgImg.src = 'background.jpg';
+bgImg.onload = () => { redrawAll(); };
+ctx.fillStyle = SAGE; ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+
+
+const COLORS = {
+  star: ['#FFD700','#FFC200','#FFE066'],
+  sun:  ['#FF8C00','#FFA500','#FFB833'],
+  moon: ['#C8D8E8','#B0C4D8','#D4E4F4']
+};
+
+let pseudo = '', tool = 'star', elements = [], pseudos = new Set();
+let credits = 0; // number of remaining placements paid for (1 per purchase)
+let zoom = 1, camX = 0, camY = 0, isDragging = false;
+let dragStart = {x:0,y:0}, camStart = {x:0,y:0};
+const MIN_ZOOM = 1, MAX_ZOOM = 8;
+const wrap = document.getElementById('map-wrap');
+
+function randColor(t) { const c = COLORS[t]; return c[Math.floor(Math.random()*c.length)]; }
+
+function fitFontSize(ctx, text, maxWidth, maxSize) {
+  let size = maxSize;
+  ctx.font = `bold ${size}px sans-serif`;
+  while (ctx.measureText(text).width > maxWidth && size > 6) {
+    size -= 0.5;
+    ctx.font = `bold ${size}px sans-serif`;
+  }
+  return size;
+}
+
+function drawElement(el) {
+  const cx = el.x, cy = el.y;
+  ctx.save(); ctx.fillStyle = el.color;
+  if (el.type === 'star') {
+    const r=8, ir=4;
+    ctx.beginPath();
+    for (let i=0;i<10;i++){const a=(i*Math.PI/5)-Math.PI/2,rad=i%2===0?r:ir;i===0?ctx.moveTo(cx+rad*Math.cos(a),cy+rad*Math.sin(a)):ctx.lineTo(cx+rad*Math.cos(a),cy+rad*Math.sin(a));}
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#2a1a00'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitFontSize(ctx, el.pseudo, ir*2*1.4, 9);
+    ctx.fillText(el.pseudo,cx,cy);
+  } else if (el.type === 'sun') {
+    for(let i=0;i<8;i++){const a=(i/8)*Math.PI*2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a-0.2)*14,cy+Math.sin(a-0.2)*14);ctx.lineTo(cx+Math.cos(a+0.2)*14,cy+Math.sin(a+0.2)*14);ctx.closePath();ctx.fill();}
+    ctx.beginPath();ctx.arc(cx,cy,9,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#7a2e00'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitFontSize(ctx, el.pseudo, 9*2*1.4, 9);
+    ctx.fillText(el.pseudo,cx,cy);
+  } else {
+    ctx.beginPath();ctx.arc(cx,cy,9,0,Math.PI*2);ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();ctx.arc(cx+5.5,cy-2,6.5,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    if (bgImg.complete && bgImg.naturalWidth) {
+      ctx.save();
+      ctx.beginPath();ctx.arc(cx+5.5,cy-2,6.5,0,Math.PI*2);ctx.clip();
+      ctx.drawImage(bgImg, 0, 0, MAP_SIZE, MAP_SIZE);
+      ctx.restore();
+    }
+    ctx.fillStyle='#2a3a4a'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    fitFontSize(ctx, el.pseudo, 9*2*1.1, 9);
+    ctx.fillText(el.pseudo,cx,cy);
+  }
+  ctx.restore();
+}
+
+function drawBorder() {
+  ctx.strokeStyle='rgba(255,255,255,0.85)';
+  ctx.lineWidth=3;
+  ctx.strokeRect(1.5,1.5,MAP_SIZE-3,MAP_SIZE-3);
+}
+
+function redrawAll() {
+  if (bgImg.complete && bgImg.naturalWidth) {
+    ctx.drawImage(bgImg, 0, 0, MAP_SIZE, MAP_SIZE);
+  } else {
+    ctx.fillStyle=SAGE; ctx.fillRect(0,0,MAP_SIZE,MAP_SIZE);
+  }
+  for (const el of elements) { drawElement(el); }
+  drawBorder();
+}
+
+function applyTransform() {
+  canvas.style.transform = `scale(${zoom})`;
+  canvas.style.left = camX+'px'; canvas.style.top = camY+'px';
+  document.getElementById('zoom-label').textContent = Math.round(zoom*100)+'%';
+}
+
+function clampCam() {
+  const ww=wrap.clientWidth, wh=wrap.clientHeight;
+  camX = Math.max(Math.min(ww-MAP_SIZE*zoom,0), Math.min(0,camX));
+  camY = Math.max(Math.min(wh-MAP_SIZE*zoom,0), Math.min(0,camY));
+}
+
+
+
+function zoomAt(nz, wx, wy) {
+  nz = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nz));
+  const r=nz/zoom; camX=wx-r*(wx-camX); camY=wy-r*(wy-camY); zoom=nz;
+  clampCam(); applyTransform();
+}
+
+function clampMapPos(x, y) {
+  const m = tool==='sun'?14:9;
+  return { x:Math.max(m,Math.min(MAP_SIZE-m,Math.floor(x))), y:Math.max(m,Math.min(MAP_SIZE-m,Math.floor(y))) };
+}
+
+function screenToMap(sx, sy) { return { x:(sx-camX)/zoom, y:(sy-camY)/zoom }; }
+
+function updateStats() {
+  document.getElementById('count-star').textContent = elements.filter(e=>e.type==='star').length;
+  document.getElementById('count-sun').textContent  = elements.filter(e=>e.type==='sun').length;
+  document.getElementById('count-moon').textContent = elements.filter(e=>e.type==='moon').length;
+  document.getElementById('count-users').textContent = pseudos.size;
+}
+
+async function saveEl(el) {
+  try {
+    const lr = await window.storage.list('el:',true);
+    const count = lr ? lr.keys.length : 0;
+    await window.storage.set('el:'+count, JSON.stringify(el), true);
+    const ur = await window.storage.get('users',true);
+    const users = ur ? JSON.parse(ur.value) : [];
+    if (!users.includes(el.pseudo)) { users.push(el.pseudo); await window.storage.set('users',JSON.stringify(users),true); }
+  } catch(e) {}
+}
+
+async function loadEls() {
+  try {
+    const lr = await window.storage.list('el:',true);
+    if (!lr) return;
+    for (const key of lr.keys) {
+      try { const r=await window.storage.get(key,true); if(r){const el=JSON.parse(r.value);elements.push(el);pseudos.add(el.pseudo);} } catch(e) {}
+    }
+    const ur = await window.storage.get('users',true);
+    if (ur) JSON.parse(ur.value).forEach(p=>pseudos.add(p));
+    redrawAll(); updateStats();
+  } catch(e) {}
+}
+
+function placeElement(screenX, screenY) {
+  if (!pseudo || credits <= 0) return;
+  const mp = screenToMap(screenX, screenY);
+  const pos = clampMapPos(mp.x, mp.y);
+  const el = { type:tool, x:pos.x, y:pos.y, pseudo, color:randColor(tool), t:Date.now() };
+  elements.push(el); pseudos.add(pseudo);
+  drawElement(el); drawBorder();
+  updateStats(); saveEl(el);
+  credits -= 1;
+  updatePurchaseBadge();
+}
+
+function updatePurchaseBadge() {
+  const badge = document.getElementById('purchase-badge');
+  const icons = {star:'⭐',sun:'☀️',moon:'🌙'};
+  if (credits > 0) {
+    badge.textContent = `${icons[tool]} Clique sur la carte pour placer ton élément`;
+    badge.style.display = 'inline-block';
+    wrap.style.cursor = 'crosshair';
+  } else if (pseudo) {
+    badge.textContent = `✅ Élément placé ! Achète-en un autre pour continuer`;
+    badge.style.display = 'inline-block';
+    wrap.style.cursor = 'default';
+    setTimeout(() => { document.getElementById('overlay').style.display = 'flex'; resetShop(); }, 1200);
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function resetShop() {
+  document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));
+  document.querySelector('.product-card[data-tool="star"]').classList.add('selected');
+  selectedProduct = { tool:'star', price:1 };
+  updateCtaText();
+}
+
+/* Mouse */
+let didDrag = false;
+wrap.addEventListener('mousedown', e => {
+  if (e.button===1||e.button===2||e.altKey) {
+    isDragging=true; didDrag=false;
+    dragStart={x:e.clientX,y:e.clientY}; camStart={x:camX,y:camY};
+    wrap.style.cursor='grab'; e.preventDefault(); return;
+  }
+  if (e.button===0) { isDragging=false; didDrag=false; }
+});
+wrap.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  camX=camStart.x+(e.clientX-dragStart.x); camY=camStart.y+(e.clientY-dragStart.y);
+  clampCam(); applyTransform(); didDrag=true;
+});
+wrap.addEventListener('mouseup', e => {
+  if (e.button===0 && !isDragging) {
+    const rect=wrap.getBoundingClientRect();
+    placeElement(e.clientX-rect.left, e.clientY-rect.top);
+  }
+  isDragging=false; wrap.style.cursor = credits>0 ? 'crosshair' : 'default';
+});
+wrap.addEventListener('mouseleave', ()=>{ isDragging=false; });
+wrap.addEventListener('contextmenu', e=>e.preventDefault());
+wrap.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const rect=wrap.getBoundingClientRect();
+  zoomAt(zoom*(e.deltaY<0?1.15:1/1.15), e.clientX-rect.left, e.clientY-rect.top);
+}, {passive:false});
+
+/* Touch */
+let lastTouchDist=null, touchMoved=false, touchStart={x:0,y:0};
+wrap.addEventListener('touchstart', e=>{
+  if (e.touches.length===2) {
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    lastTouchDist=Math.sqrt(dx*dx+dy*dy);
+    const rect=wrap.getBoundingClientRect();
+    dragStart={x:(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left, y:(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top};
+    isDragging=true; e.preventDefault();
+  } else if (e.touches.length===1) {
+    const rect=wrap.getBoundingClientRect();
+    touchStart={x:e.touches[0].clientX-rect.left, y:e.touches[0].clientY-rect.top};
+    dragStart={x:e.touches[0].clientX,y:e.touches[0].clientY};
+    camStart={x:camX,y:camY}; touchMoved=false; isDragging=true;
+  }
+},{passive:false});
+wrap.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  if (e.touches.length===2 && lastTouchDist) {
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const rect=wrap.getBoundingClientRect();
+    const mx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
+    const my=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
+    zoomAt(zoom*(dist/lastTouchDist),mx,my); lastTouchDist=dist;
+  } else if (e.touches.length===1) {
+    const dx=e.touches[0].clientX-dragStart.x, dy=e.touches[0].clientY-dragStart.y;
+    if (Math.abs(dx)>4||Math.abs(dy)>4) touchMoved=true;
+    camX=camStart.x+dx; camY=camStart.y+dy; clampCam(); applyTransform();
+  }
+},{passive:false});
+wrap.addEventListener('touchend', e=>{
+  if (e.touches.length===0) {
+    if (!touchMoved && e.changedTouches.length===1) {
+      placeElement(touchStart.x, touchStart.y);
+    }
+    isDragging=false; lastTouchDist=null; touchMoved=false;
+  }
+  if (e.touches.length<2) lastTouchDist=null;
+});
+
+/* Controls */
+document.getElementById('zoom-in').addEventListener('click',()=>zoomAt(zoom*1.5,wrap.clientWidth/2,wrap.clientHeight/2));
+document.getElementById('zoom-out').addEventListener('click',()=>zoomAt(zoom/1.5,wrap.clientWidth/2,wrap.clientHeight/2));
+document.getElementById('zoom-reset').addEventListener('click',()=>{zoom=1;camX=0;camY=0;clampCam();applyTransform();});
+/* Shop logic */
+const PRODUCTS = {
+  star: { label:'étoile', price:1, name:'mon étoile' },
+  moon: { label:'lune',   price:2, name:'ma lune' },
+  sun:  { label:'soleil', price:3, name:'mon soleil' }
+};
+let selectedProduct = { tool:'star', price:1 };
+
+function updateCtaText() {
+  const p = PRODUCTS[selectedProduct.tool];
+  document.getElementById('enter-btn').textContent = `Payer ${p.price} € et placer ${p.name}`;
+}
+
+document.querySelectorAll('.product-card').forEach(card=>{
+  card.addEventListener('click',()=>{
+    document.querySelectorAll('.product-card').forEach(c=>c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedProduct = { tool: card.dataset.tool, price: parseFloat(card.dataset.price) };
+    updateCtaText();
+  });
+});
+
+document.getElementById('enter-btn').addEventListener('click', async ()=>{
+  const val=document.getElementById('pseudo-input').value.trim();
+  if (!val) { document.getElementById('pseudo-input').focus(); return; }
+
+  const btn = document.getElementById('enter-btn');
+  btn.disabled = true;
+  btn.textContent = 'Redirection vers le paiement...';
+
+  try {
+    const res = await fetch('/api/create-checkout', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tool: selectedProduct.tool, pseudo: val })
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url; // redirige vers la page de paiement Stripe
+    } else {
+      alert("Erreur lors de la création du paiement. Réessaie.");
+      btn.disabled = false;
+      updateCtaText();
+    }
+  } catch (err) {
+    alert("Erreur de connexion. Réessaie.");
+    btn.disabled = false;
+    updateCtaText();
+  }
+});
+document.getElementById('pseudo-input').addEventListener('keydown',e=>{
+  if (e.key==='Enter') document.getElementById('enter-btn').click();
+});
+
+/* Vérifie si on revient d'un paiement Stripe réussi */
+async function checkPaymentReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('paid') === '1') {
+    const sessionId = params.get('session_id');
+    try {
+      const res = await fetch(`/api/verify-session?session_id=${sessionId}`);
+      const data = await res.json();
+      if (data.paid) {
+        pseudo = decodeURIComponent(params.get('pseudo'));
+        tool = params.get('tool');
+        credits = 1;
+        document.getElementById('overlay').style.display='none';
+        document.getElementById('user-info').textContent='👤 '+pseudo;
+        updatePurchaseBadge();
+      } else {
+        alert("Le paiement n'a pas pu être vérifié.");
+      }
+    } catch (e) {
+      alert("Erreur lors de la vérification du paiement.");
+    }
+    // Nettoie l'URL pour ne pas garder les paramètres
+    window.history.replaceState({}, '', window.location.pathname);
+  } else if (params.get('canceled') === '1') {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
+applyTransform();
+drawBorder();
+loadEls();
+checkPaymentReturn();
+</script>
+</body>
+</html>
