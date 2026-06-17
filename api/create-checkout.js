@@ -7,7 +7,7 @@ module.exports = async function handler(req, res) {
 
   const { tool, pseudo } = req.body;
 
-  const prices = { star: 100, moon: 200, sun: 300 }; // 1€, 2€, 3€
+  const prices = { star: 100, moon: 200, sun: 300 };
   const names  = { star: 'Étoile ⭐', moon: 'Lune 🌙', sun: 'Soleil ☀️' };
 
   if (!prices[tool] || !pseudo || pseudo.length > 24) {
@@ -26,12 +26,14 @@ module.exports = async function handler(req, res) {
         quantity: 1,
       }],
       mode: 'payment',
-     success_url: `https://cosmomap-iota.vercel.app/?paid=1&tool=${tool}&pseudo=${encodeURIComponent(pseudo)}&session_id={CHECKOUT_SESSION_ID}`,
-cancel_url: `https://cosmomap-iota.vercel.app/?canceled=1`,
+      success_url: `https://cosmomap-iota.vercel.app/?paid=1&tool=${tool}&pseudo=${encodeURIComponent(pseudo)}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://cosmomap-iota.vercel.app/?canceled=1`,
+    });
 
     res.status(200).json({ url: session.url });
   } catch (error) {
     console.error('Erreur Stripe:', error);
     res.status(500).json({ error: 'Erreur lors de la création du paiement' });
   }
+};
 };
