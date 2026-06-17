@@ -26,9 +26,8 @@ module.exports = async function handler(req, res) {
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${req.headers.origin}/?paid=1&tool=${tool}&pseudo=${encodeURIComponent(pseudo)}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.origin}/?canceled=1`,
-    });
+     success_url: `https://cosmomap-iota.vercel.app/?paid=1&tool=${tool}&pseudo=${encodeURIComponent(pseudo)}&session_id={CHECKOUT_SESSION_ID}`,
+cancel_url: `https://cosmomap-iota.vercel.app/?canceled=1`,
 
     res.status(200).json({ url: session.url });
   } catch (error) {
